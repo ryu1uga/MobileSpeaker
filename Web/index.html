@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#0e1014">
+<title>Parlante de la PC</title>
+<style>
+  :root {
+    --bg: #0e1014;
+    --card: #171a21;
+    --line: #262b35;
+    --text: #e8eaef;
+    --muted: #8a92a3;
+    --accent: #4f8cff;
+    --ok: #34c77b;
+    --warn: #e6a23c;
+    --bad: #e5534b;
+    --idle: #5c6370;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.4;
+    -webkit-text-size-adjust: 100%;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  main {
+    max-width: 440px;
+    margin: 0 auto;
+    padding: calc(24px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+
+  .status {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 16px; font-weight: 500;
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--idle); flex: none; }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 0 4px rgba(52, 199, 123, 0.18); }
+  .dot.warn { background: var(--warn); }
+  .dot.bad { background: var(--bad); }
+  .dot.info { background: var(--accent); }
+
+  button {
+    display: block; width: 100%;
+    font: inherit; font-size: 19px; font-weight: 600;
+    color: #fff; background: var(--accent);
+    border: 0; border-radius: 14px; padding: 18px 16px; margin-bottom: 20px;
+    -webkit-appearance: none; appearance: none; cursor: pointer;
+  }
+  button:active { opacity: 0.8; }
+  button.stop { background: #2a2f3a; color: var(--text); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .row label { font-weight: 500; }
+  .row output { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ctl + .ctl { margin-top: 18px; }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 32px; background: transparent; margin: 0;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 6px; border-radius: 3px; background: var(--line);
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--text); margin-top: -10px; border: 0;
+  }
+
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+  .stats span { display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .stats b { font-weight: 600; font-size: 17px; font-variant-numeric: tabular-nums; }
+
+  .hint { color: var(--muted); font-size: 13px; margin: 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Parlante de la PC</h1>
+  <p class="sub" id="host"></p>
+
+  <div class="status"><span class="dot" id="dot"></span><span id="statusText">Detenido</span></div>
+
+  <button id="play" type="button">Reproducir</button>
+
+  <section class="card">
+    <div class="ctl">
+      <div class="row"><label for="delay">Retardo objetivo</label><output id="delayOut">80 ms</output></div>
+      <input type="range" id="delay" min="30" max="300" step="10" value="80">
+    </div>
+    <div class="ctl">
+      <div class="row"><label for="vol">Volumen</label><output id="volOut">100 %</output></div>
+      <input type="range" id="vol" min="0" max="150" step="1" value="100">
+    </div>
+  </section>
+
+  <section class="card stats">
+    <div><span>Buffer</span><b id="sBuf">-</b></div>
+    <div><span>Resincronizaciones</span><b id="sResync">0</b></div>
+    <div><span>Formato</span><b id="sFmt">-</b></div>
+    <div><span>Recibido</span><b id="sRate">-</b></div>
+  </section>
+
+  <p class="hint">Mantén la pantalla encendida: si se bloquea, el celular puede cortar el audio. Con un retardo muy bajo pueden aparecer cortes; súbelo si escuchas chasquidos.</p>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var AC = window.AudioContext || window.webkitAudioContext;
+  var RESYNC_MARGIN = 0.150;   // segundos por encima del objetivo antes de resincronizar
+  var SILENCE_MS = 700;        // sin datos durante este tiempo => "sin sonido en la PC"
+  var RECONNECT_MS = 1000;
+
+  var el = {
+    host: document.getElementById('host'),
+    dot: document.getElementById('dot'),
+    status: document.getElementById('statusText'),
+    play: document.getElementById('play'),
+    delay: document.getElementById('delay'),
+    delayOut: document.getElementById('delayOut'),
+    vol: document.getElementById('vol'),
+    volOut: document.getElementById('volOut'),
+    sBuf: document.getElementById('sBuf'),
+    sResync: document.getElementById('sResync'),
+    sFmt: document.getElementById('sFmt'),
+    sRate: document.getElementById('sRate')
+  };
+
+  var ctx = null;
+  var gainNode = null;
+  var silentAudio = null;
+  var ws = null;
+  var running = false;
+  var reconnectTimer = null;
+
+  var sampleRate = 0;
+  var channels = 2;
+  var nextTime = 0;
+  var forceResync = true;
+  var resyncCount = 0;
+
+  var connectedAt = 0;
+  var lastDataAt = 0;
+  var everConnected = false;
+  var bytesWindow = 0;
+  var bytesWindowStart = Date.now();
+
+  var targetMs = 80;
+  var volumePct = 100;
+
+  el.host.textContent = location.host;
+
+  // ---------- Preferencias (opcionales) ----------
+  function loadPref(key, def, min, max) {
+    try {
+      var v = parseInt(window.localStorage.getItem(key), 10);
+      if (!isNaN(v) && v >= min && v <= max) return v;
+    } catch (e) { }
+    return def;
+  }
+  function savePref(key, value) {
+    try { window.localStorage.setItem(key, String(value)); } catch (e) { }
+  }
+
+  targetMs = loadPref('mobilespeaker.delay', 80, 30, 300);
+  volumePct = loadPref('mobilespeaker.vol', 100, 0, 150);
+  el.delay.value = targetMs;
+  el.vol.value = volumePct;
+  el.delayOut.textContent = targetMs + ' ms';
+  el.volOut.textContent = volumePct + ' %';
+
+  // ---------- WAV silencioso para el interruptor de silencio de iOS (en otros sistemas no afecta) ----------
+  function createSilentWavUrl() {
+    var rate = 8000, frames = 4000; // 0.5 s mono 16 bits
+    var buffer = new ArrayBuffer(44 + frames * 2);
+    var v = new DataView(buffer);
+    function str(offset, s) { for (var i = 0; i < s.length; i++) v.setUint8(offset + i, s.charCodeAt(i)); }
+    str(0, 'RIFF'); v.setUint32(4, 36 + frames * 2, true); str(8, 'WAVE');
+    str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    str(36, 'data'); v.setUint32(40, frames * 2, true);
+    return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
+  }
+
+  // ---------- Desbloqueo de audio (debe llamarse dentro del gesto del usuario) ----------
+  function unlockAudio() {
+    if (!ctx) {
+      if (!AC) {
+        setStatus('bad', 'Este navegador no soporta Web Audio');
+        return false;
+      }
+      try { ctx = new AC({ latencyHint: 'interactive' }); } catch (e) { ctx = new AC(); }
+      gainNode = ctx.createGain();
+      gainNode.gain.value = volumePct / 100;
+      gainNode.connect(ctx.destination);
+    }
+
+    // Buffer vacio reproducido dentro del gesto: desbloquea Web Audio en iOS y en navegadores con politica de autoplay.
+    var empty = ctx.createBuffer(1, 1, 22050);
+    var src = ctx.createBufferSource();
+    src.buffer = empty;
+    src.connect(ctx.destination);
+    if (src.start) src.start(0); else src.noteOn(0);
+
+    if (ctx.resume) {
+      var p = ctx.resume();
+      if (p && p.catch) p.catch(function () { });
+    }
+
+    // Un <audio> en bucle cambia la sesion de audio a "reproduccion",
+    // asi suena aunque el interruptor de silencio este activado.
+    if (!silentAudio) {
+      silentAudio = document.createElement('audio');
+      silentAudio.setAttribute('playsinline', '');
+      silentAudio.setAttribute('x-webkit-airplay', 'deny');
+      silentAudio.preload = 'auto';
+      silentAudio.loop = true;
+      silentAudio.src = createSilentWavUrl();
+    }
+    var ap = silentAudio.play();
+    if (ap && ap.catch) ap.catch(function () { });
+
+    forceResync = true;
+    return true;
+  }
+
+  // ---------- WebSocket ----------
+  function connect() {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    if (!running) return;
+
+    var proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    var socket;
+    try {
+      socket = new WebSocket(proto + location.host + '/ws');
+    } catch (e) {
+      scheduleReconnect();
+      return;
+    }
+    socket.binaryType = 'arraybuffer';
+    ws = socket;
+
+    socket.onopen = function () {
+      if (ws !== socket) return;
+      everConnected = true;
+      connectedAt = Date.now();
+      lastDataAt = 0;
+      forceResync = true;
+    };
+
+    socket.onmessage = function (ev) {
+      if (ws !== socket) return;
+      if (typeof ev.data === 'string') {
+        try {
+          var info = JSON.parse(ev.data);
+          sampleRate = info.sampleRate | 0;
+          channels = info.channels | 0 || 2;
+          el.sFmt.textContent = (sampleRate / 1000) + ' kHz';
+        } catch (e) { }
+        return;
+      }
+      onAudio(ev.data);
+    };
+
+    socket.onclose = function () {
+      if (ws !== socket) return;
+      ws = null;
+      scheduleReconnect();
+    };
+
+    socket.onerror = function () {
+      try { socket.close(); } catch (e) { }
+    };
+  }
+
+  function scheduleReconnect() {
+    if (!running || reconnectTimer) return;
+    reconnectTimer = setTimeout(function () {
+      reconnectTimer = null;
+      connect();
+    }, RECONNECT_MS);
+  }
+
+  function disconnect() {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    var socket = ws;
+    ws = null;
+    if (socket) {
+      try { socket.close(); } catch (e) { }
+    }
+  }
+
+  // ---------- Reproduccion ----------
+  function onAudio(data) {
+    if (!ctx || sampleRate <= 0 || channels !== 2 || !data || data.byteLength < 4) return;
+
+    var now = Date.now();
+    lastDataAt = now;
+    bytesWindow += data.byteLength;
+
+    var pcm = new Int16Array(data, 0, (data.byteLength >> 2) << 1);
+    var frames = pcm.length >> 1;
+    if (frames === 0) return;
+
+    var buffer = ctx.createBuffer(2, frames, sampleRate);
+    var left = buffer.getChannelData(0);
+    var right = buffer.getChannelData(1);
+    for (var i = 0, j = 0; i < frames; i++, j += 2) {
+      left[i] = pcm[j] / 32768;
+      right[i] = pcm[j + 1] / 32768;
+    }
+
+    var t = ctx.currentTime;
+    var target = targetMs / 1000;
+    var ahead = nextTime - t;
+
+    // Resincroniza si el buffer se vacio, si se acumulo demasiado o si cambio el objetivo.
+    if (forceResync || ahead < 0.005 || ahead > target + RESYNC_MARGIN) {
+      if (!forceResync) resyncCount++;
+      forceResync = false;
+      nextTime = t + target;
+    }
+
+    var src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(gainNode);
+    if (src.start) src.start(nextTime); else src.noteOn(nextTime);
+    nextTime += buffer.duration;
+  }
+
+  // ---------- Estado e interfaz ----------
+  var currentStatusKey = '';
+  function setStatus(kind, text) {
+    var key = kind + '|' + text;
+    if (key === currentStatusKey) return;
+    currentStatusKey = key;
+    el.dot.className = 'dot ' + kind;
+    el.status.textContent = text;
+  }
+
+  function updateButton() {
+    if (!running) {
+      el.play.textContent = 'Reproducir';
+      el.play.className = '';
+    } else if (ctx && ctx.state !== 'running') {
+      el.play.textContent = 'Reanudar audio';
+      el.play.className = '';
+    } else {
+      el.play.textContent = 'Detener';
+      el.play.className = 'stop';
+    }
+  }
+
+  function tick() {
+    var now = Date.now();
+
+    if (!running) {
+      setStatus('', 'Detenido');
+    } else if (!ws || ws.readyState !== 1) {
+      setStatus('warn', everConnected ? 'Reconectando...' : 'Conectando...');
+    } else if (ctx && ctx.state !== 'running') {
+      setStatus('bad', 'Audio pausado por el sistema. Toca "Reanudar audio"');
+    } else if (lastDataAt === 0 || lastDataAt < connectedAt) {
+      setStatus(now - connectedAt < 1500 ? 'info' : 'warn',
+                now - connectedAt < 1500 ? 'Conectado' : 'Sin sonido en la PC');
+    } else if (now - lastDataAt > SILENCE_MS) {
+      setStatus('warn', 'Sin sonido en la PC');
+    } else {
+      setStatus('ok', 'Reproduciendo');
+    }
+
+    if (ctx && running) {
+      var ms = Math.max(0, (nextTime - ctx.currentTime) * 1000);
+      el.sBuf.textContent = Math.round(ms) + ' ms';
+    } else {
+      el.sBuf.textContent = '-';
+    }
+    el.sResync.textContent = String(resyncCount);
+
+    var elapsed = now - bytesWindowStart;
+    if (elapsed >= 1000) {
+      el.sRate.textContent = running ? Math.round(bytesWindow / 1024 / (elapsed / 1000)) + ' KB/s' : '-';
+      bytesWindow = 0;
+      bytesWindowStart = now;
+    }
+
+    updateButton();
+  }
+
+  // ---------- Eventos ----------
+  el.play.addEventListener('click', function () {
+    if (running && ctx && ctx.state !== 'running') {
+      unlockAudio();
+      updateButton();
+      return;
+    }
+
+    if (!running) {
+      if (!unlockAudio()) return;
+      running = true;
+      everConnected = false;
+      resyncCount = 0;
+      connect();
+    } else {
+      running = false;
+      disconnect();
+      if (silentAudio) silentAudio.pause();
+      if (ctx && ctx.suspend) {
+        var p = ctx.suspend();
+        if (p && p.catch) p.catch(function () { });
+      }
+      nextTime = 0;
+      forceResync = true;
+    }
+    tick();
+  });
+
+  el.delay.addEventListener('input', function () {
+    targetMs = parseInt(el.delay.value, 10) || 80;
+    el.delayOut.textContent = targetMs + ' ms';
+    forceResync = true;
+    savePref('mobilespeaker.delay', targetMs);
+  });
+
+  el.vol.addEventListener('input', function () {
+    volumePct = parseInt(el.vol.value, 10);
+    if (isNaN(volumePct)) volumePct = 100;
+    el.volOut.textContent = volumePct + ' %';
+    if (gainNode) gainNode.gain.value = volumePct / 100;
+    savePref('mobilespeaker.vol', volumePct);
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden || !running) return;
+    if (ctx && ctx.state !== 'running' && ctx.resume) {
+      var p = ctx.resume();
+      if (p && p.catch) p.catch(function () { });
+    }
+    forceResync = true;
+    if (!ws) connect();
+  });
+
+  setInterval(tick, 250);
+  tick();
+})();
+</script>
+</body>
+</html>
