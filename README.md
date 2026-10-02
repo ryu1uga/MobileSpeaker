@@ -51,9 +51,18 @@ Si PowerShell no deja ejecutar el script, usa: `powershell -ExecutionPolicy Bypa
 El instalador:
 
 - Instala el programa en `C:\Program Files\MobileSpeaker` y crea el acceso en el menú Inicio (y en el escritorio, si lo eliges).
-- Crea una regla en el Firewall de Windows para que el celular pueda conectarse sin avisos. Por defecto solo para **redes privadas**; hay una casilla para permitir también **redes públicas** (útil si tu Wi-Fi está marcada como pública).
+- Crea una regla en el Firewall de Windows para que el celular pueda conectarse sin avisos. Por defecto acepta conexiones **solo desde la red local**, en cualquier perfil de red (Windows suele marcar las conexiones por cable como **públicas**, y una regla solo para redes privadas las bloquearía). Hay una casilla para limitarla a redes privadas.
 - Pide permisos de administrador (por Program Files y el firewall).
 - Al desinstalar quita el programa, la regla del firewall, el inicio con Windows y las preferencias.
+
+### Compilación automática en GitHub (sin instalar nada)
+
+El workflow `.github/workflows/build.yml` compila en una máquina Windows de GitHub y genera el instalador y el exe portable:
+
+- **Push a `main`** (o "Run workflow" en la pestaña **Actions**): los archivos quedan en la ejecución, en la sección **Artifacts**, durante 14 días.
+- **Tag de versión** (por ejemplo `git tag v1.0.0` y `git push origin v1.0.0`): además se crea un **Release** con `MobileSpeaker-Setup-1.0.0.exe` y `MobileSpeaker-1.0.0-portable.exe` para descargar.
+
+Es gratis en repositorios públicos. En privados consume los minutos incluidos del plan gratuito (cada compilación toma unos minutos).
 
 ### Exe portable (sin instalar)
 
@@ -100,7 +109,7 @@ El indicador muestra si está conectado, reproduciendo, si no hay sonido en la P
   1. En la PC abre `http://localhost:8765`. Si no carga, el puente no está activo.
   2. Usa la dirección **recomendada**, no la de un adaptador virtual.
   3. Revisa que el celular esté en la misma red Wi-Fi (no en datos móviles ni en una red de invitados).
-  4. Si tu red Wi-Fi está marcada como **pública**, reinstala marcando la casilla de redes públicas, o cámbiala a privada en Configuración > Red e Internet > Wi-Fi.
+  4. Si la red de la PC (Wi-Fi o Ethernet) está marcada como **pública** y usas el exe portable, cámbiala a privada en Configuración > Red e Internet > Ethernet (o Wi-Fi) > Tipo de perfil de red. Con el instalador no hace falta.
   5. Algunas redes (universidades, oficinas, hoteles) aíslan a los dispositivos entre sí; ahí no funcionará. Para comprobarlo, conecta la PC al hotspot del celular y prueba de nuevo.
 - **iPhone: no suena con el interruptor de silencio activado**: toca **Detener** y luego **Reproducir** otra vez.
 - **Dice "Sin sonido en la PC"**: Windows no envía datos al loopback cuando nada está sonando. Reproduce algo.

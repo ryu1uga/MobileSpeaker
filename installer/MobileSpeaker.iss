@@ -41,7 +41,7 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "firewallpublic"; Description: "Permitir tambien en redes publicas (Wi-Fi de universidad, oficina, cafe)"; GroupDescription: "Firewall de Windows (siempre se permite en redes privadas):"; Flags: unchecked
+Name: "firewallprivateonly"; Description: "Permitir conexiones solo en redes privadas (mas restrictivo; puede bloquear al celular si la red de la PC esta marcada como publica)"; GroupDescription: "Firewall de Windows:"; Flags: unchecked
 
 [Files]
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -53,8 +53,10 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 [Run]
 ; Regla de entrada para que el celular pueda conectarse sin el aviso del firewall.
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#FirewallRule}"""; Flags: runhidden waituntilterminated; StatusMsg: "Configurando el Firewall de Windows..."
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow program=""{app}\{#AppExe}"" enable=yes profile=private"; Flags: runhidden waituntilterminated; Tasks: not firewallpublic
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow program=""{app}\{#AppExe}"" enable=yes profile=private,public"; Flags: runhidden waituntilterminated; Tasks: firewallpublic
+; Por defecto: cualquier perfil de red, pero solo desde la red local (remoteip=localsubnet).
+; Asi funciona aunque Windows marque la red (por ejemplo, la de Ethernet) como publica.
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow program=""{app}\{#AppExe}"" enable=yes profile=any remoteip=localsubnet"; Flags: runhidden waituntilterminated; Tasks: not firewallprivateonly
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow program=""{app}\{#AppExe}"" enable=yes profile=private remoteip=localsubnet"; Flags: runhidden waituntilterminated; Tasks: firewallprivateonly
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]

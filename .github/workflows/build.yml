@@ -1,0 +1,76 @@
+# Compila MobileSpeaker en Windows y genera el instalador y el exe portable.
+# - Push a main o ejecucion manual: los archivos quedan como "artifact" en la pestana Actions.
+# - Tag vX.Y.Z (por ejemplo v1.0.0): ademas se crea un Release con los .exe para descargar.
+
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Obtener el codigo
+        uses: actions/checkout@v4
+
+      - name: Instalar .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Calcular la version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $version = $env:GITHUB_REF_NAME.TrimStart("v")
+          } else {
+            $version = "1.0.0-dev.$env:GITHUB_RUN_NUMBER"
+          }
+          "value=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Version: $version"
+
+      - name: Instalar Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+
+      - name: Generar el instalador
+        shell: pwsh
+        run: ./build-installer.ps1 -Version "${{ steps.version.outputs.value }}"
+
+      - name: Generar el exe portable
+        shell: pwsh
+        run: |
+          dotnet publish MobileSpeaker.csproj -c Release `
+            -p:Version="${{ steps.version.outputs.value }}" `
+            -o publish/portable
+          Copy-Item publish/portable/MobileSpeaker.exe "publish/MobileSpeaker-${{ steps.version.outputs.value }}-portable.exe"
+
+      - name: Subir los archivos (Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MobileSpeaker-${{ steps.version.outputs.value }}
+          path: |
+            publish/MobileSpeaker-Setup-*.exe
+            publish/MobileSpeaker-*-portable.exe
+          retention-days: 14
+
+      - name: Crear el Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MobileSpeaker ${{ steps.version.outputs.value }}
+          files: |
+            publish/MobileSpeaker-Setup-*.exe
+            publish/MobileSpeaker-*-portable.exe
