@@ -1,10 +1,10 @@
 # Genera el instalador de MobileSpeaker.
 # Requisitos: .NET 8 SDK e Inno Setup 6.3 o superior.
-# Uso: .\build-installer.ps1            (version 1.0.0)
-#      .\build-installer.ps1 -Version 1.1.0
+# Uso: .\build-installer.ps1            (version 1.1.0)
+#      .\build-installer.ps1 -Version 1.2.0
 
 param(
-    [string]$Version = "1.0.0"
+    [string]$Version = "1.1.0"
 )
 
 $ErrorActionPreference = "Stop"

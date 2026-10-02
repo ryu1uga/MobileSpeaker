@@ -14,6 +14,9 @@ public sealed class AppSettings
     /// <summary>Activar el puente automaticamente al abrir el programa.</summary>
     public bool AutoStartBridge { get; set; }
 
+    /// <summary>La X de la ventana minimiza a la bandeja en lugar de cerrar el programa.</summary>
+    public bool CloseToTray { get; set; } = true;
+
     private static string FilePath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MobileSpeaker", "settings.json");
 

@@ -49,6 +49,7 @@ internal sealed class MainForm : Form
     private readonly NumericUpDown _portInput;
     private readonly CheckBox _autoStartCheck;
     private readonly CheckBox _windowsStartupCheck;
+    private readonly CheckBox _closeToTrayCheck;
     private readonly TextBox _logBox;
 
     private List<LocalAddress> _addresses = new();
@@ -56,6 +57,7 @@ internal sealed class MainForm : Form
     private bool _autoStartDone;
     private bool _trayHintShown;
     private bool _exitRequested;
+    private bool _shuttingDown;
     private bool _readyToClose;
     private bool _loadingOptions;
     private string? _lastError;
@@ -288,7 +290,35 @@ internal sealed class MainForm : Form
                 _loadingOptions = false;
             }
         };
-        var optionsCard = Card(Stack(portRow, _autoStartCheck, _windowsStartupCheck));
+        _closeToTrayCheck = new CheckBox
+        {
+            Text = "Al cerrar la ventana, minimizar a la bandeja en lugar de salir",
+            AutoSize = true,
+            Margin = new Padding(0, 2, 0, 0)
+        };
+        _closeToTrayCheck.CheckedChanged += (_, _) =>
+        {
+            if (_loadingOptions)
+                return;
+            _settings.CloseToTray = _closeToTrayCheck.Checked;
+            _settings.Save();
+        };
+
+        var minimizeButton = new Button
+        {
+            Text = "Minimizar a la bandeja",
+            AutoSize = true,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = NeutralButtonColor,
+            UseVisualStyleBackColor = false,
+            Margin = new Padding(0, 8, 0, 0),
+            Padding = new Padding(8, 2, 8, 2),
+            Cursor = Cursors.Hand
+        };
+        minimizeButton.FlatAppearance.BorderSize = 0;
+        minimizeButton.Click += (_, _) => HideToTray();
+
+        var optionsCard = Card(Stack(portRow, _autoStartCheck, _windowsStartupCheck, _closeToTrayCheck, minimizeButton));
 
         // ---------- Registro ----------
         var logCaption = new Label
@@ -370,6 +400,7 @@ internal sealed class MainForm : Form
         _portInput.Value = _settings.Port;
         _autoStartCheck.Checked = _settings.AutoStartBridge;
         _windowsStartupCheck.Checked = WindowsStartup.IsEnabled();
+        _closeToTrayCheck.Checked = _settings.CloseToTray;
         _loadingOptions = false;
 
         RefreshAddresses();
@@ -410,14 +441,19 @@ internal sealed class MainForm : Form
     {
         base.OnResize(e);
         if (WindowState == FormWindowState.Minimized)
+            HideToTray();
+    }
+
+    /// <summary>Oculta la ventana; el programa (y el puente) siguen funcionando en la bandeja.</summary>
+    private void HideToTray()
+    {
+        Hide();
+        if (!_trayHintShown)
         {
-            Hide();
-            if (!_trayHintShown)
-            {
-                _trayHintShown = true;
-                _tray.ShowBalloonTip(3000, "MobileSpeaker",
-                    "Sigue funcionando en la bandeja del sistema. Doble clic en el icono para abrirlo.", ToolTipIcon.Info);
-            }
+            _trayHintShown = true;
+            _tray.ShowBalloonTip(4000, "MobileSpeaker",
+                "Sigue funcionando en la bandeja del sistema. Doble clic en el icono para abrirlo; para cerrarlo, clic derecho y Salir.",
+                ToolTipIcon.Info);
         }
     }
 
@@ -430,11 +466,20 @@ internal sealed class MainForm : Form
             return;
         }
 
-        // Cerrar la ventana sale del programa: primero se desactiva el puente.
-        e.Cancel = true;
-        if (_exitRequested)
+        // La X de la ventana minimiza a la bandeja si la opcion esta activa.
+        // "Salir" (menu de la bandeja) siempre cierra el programa.
+        if (e.CloseReason == CloseReason.UserClosing && !_exitRequested && _settings.CloseToTray)
+        {
+            e.Cancel = true;
+            HideToTray();
             return;
-        _exitRequested = true;
+        }
+
+        // Salir del programa: primero se desactiva el puente.
+        e.Cancel = true;
+        if (_shuttingDown)
+            return;
+        _shuttingDown = true;
 
         Hide();
         _tray.Visible = false;
@@ -502,7 +547,11 @@ internal sealed class MainForm : Form
         BringToFront();
     }
 
-    private void ExitApplication() => Close();
+    private void ExitApplication()
+    {
+        _exitRequested = true;
+        Close();
+    }
 
     private void CopyMainUrl()
     {

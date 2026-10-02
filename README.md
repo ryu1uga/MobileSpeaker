@@ -7,6 +7,11 @@ Usa un celular (iPhone o Android) como parlante de la PC por Wi-Fi. Captura lo q
 - En la PC es una aplicación con ventana: un botón activa o desactiva el puente, y puede quedarse en la bandeja del sistema.
 - Pensado para funcionar incluso en equipos antiguos (por ejemplo, un iPhone 7 con iOS 15 o un Android de hace varios años). Ver [Dispositivos compatibles](#dispositivos-compatibles).
 
+## Novedades
+
+- **1.1.0**: la X de la ventana minimiza a la bandeja en lugar de cerrar el programa (se puede desactivar en Opciones) y hay un botón **Minimizar a la bandeja**. Para cerrar del todo: clic derecho en el icono de la bandeja > **Salir**.
+- **1.0.0**: primera versión con ventana, bandeja del sistema e instalador.
+
 ## Cómo funciona
 
 1. **Captura**: WASAPI loopback del dispositivo de salida por defecto (NAudio), con un buffer de 20 ms. Si cambias de parlante o audífonos en Windows, la captura se reinicia sola con el nuevo dispositivo.
@@ -44,7 +49,7 @@ No funciona en navegadores muy antiguos sin Web Audio API (por ejemplo, Internet
 .\build-installer.ps1
 ```
 
-Genera `publish\MobileSpeaker-Setup-1.0.0.exe`. Para otra versión: `.\build-installer.ps1 -Version 1.1.0`.
+Genera `publish\MobileSpeaker-Setup-1.1.0.exe`. Para otra versión: `.\build-installer.ps1 -Version 1.2.0`.
 
 Si PowerShell no deja ejecutar el script, usa: `powershell -ExecutionPolicy Bypass -File .\build-installer.ps1`.
 
@@ -60,7 +65,7 @@ El instalador:
 El workflow `.github/workflows/build.yml` compila en una máquina Windows de GitHub y genera el instalador y el exe portable:
 
 - **Push a `main`** (o "Run workflow" en la pestaña **Actions**): los archivos quedan en la ejecución, en la sección **Artifacts**, durante 14 días.
-- **Tag de versión** (por ejemplo `git tag v1.0.0` y `git push origin v1.0.0`): además se crea un **Release** con `MobileSpeaker-Setup-1.0.0.exe` y `MobileSpeaker-1.0.0-portable.exe` para descargar.
+- **Tag de versión** (por ejemplo `git tag v1.1.0` y `git push origin v1.1.0`, o desde GitHub Desktop: History > clic derecho en el commit > Create Tag, y luego Push origin): además se crea un **Release** con `MobileSpeaker-Setup-1.1.0.exe` y `MobileSpeaker-1.1.0-portable.exe` para descargar.
 
 Es gratis en repositorios públicos. En privados consume los minutos incluidos del plan gratuito (cada compilación toma unos minutos).
 
@@ -92,9 +97,11 @@ Para dejar de transmitir, pulsa **Desactivar puente**.
   - **Puerto** (8765 por defecto; se cambia con el puente desactivado).
   - **Activar el puente al abrir el programa**.
   - **Iniciar con Windows**: arranca minimizado en la bandeja del sistema.
+  - **Al cerrar la ventana, minimizar a la bandeja** (activada por defecto).
+  - Botón **Minimizar a la bandeja**.
 - **Registro**: conexiones, desconexiones, cambios de dispositivo y errores.
 
-Al **minimizar**, el programa sigue funcionando en la bandeja del sistema (junto al reloj). Desde su icono puedes activar o desactivar el puente, copiar la dirección o salir. Al **cerrar** la ventana, el puente se desactiva y el programa se cierra.
+Al **minimizar** o al **cerrar** la ventana con la X, el programa sigue funcionando en la bandeja del sistema (junto al reloj), con el puente como estaba. Doble clic en el icono para volver a abrir la ventana; con clic derecho puedes activar o desactivar el puente, copiar la dirección o **Salir**, que desactiva el puente y cierra el programa. Si desmarcas la opción de cerrar a la bandeja, la X vuelve a cerrar el programa.
 
 ### En el celular
 
